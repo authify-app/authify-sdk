@@ -1,6 +1,7 @@
 export { AuthifyClient } from './AuthifyClient';
 export type {
   AuthifyConfig,
+  BackendConfig,
   AuthifyResponse,
   AuthifyError,
   IdentityField,

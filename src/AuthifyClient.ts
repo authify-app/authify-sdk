@@ -1,6 +1,7 @@
 import { buildAuthUrl, buildShareUrl } from './deeplink/builder';
 import { parseCallback } from './deeplink/parser';
 import { registerApp, trackEvent, setPlan } from './monetization/stubs';
+import { BackendClient } from './utils/backendClient';
 import { AuthifyConfig, AuthifyResponse, AuthifyError, IdentityField } from './types';
 
 type SuccessCallback = (response: AuthifyResponse) => void;
@@ -25,6 +26,7 @@ export type OpenUrlFn = (url: string) => Promise<void>;
 export class AuthifyClient {
   private readonly config: AuthifyConfig;
   private readonly openUrl: OpenUrlFn;
+  private readonly backendClient: BackendClient | null;
 
   /**
    * Map of requestId → SDK ephemeral private key hex.
@@ -39,6 +41,7 @@ export class AuthifyClient {
   constructor(config: AuthifyConfig, openUrl: OpenUrlFn) {
     this.config = config;
     this.openUrl = openUrl;
+    this.backendClient = config.backend ? new BackendClient(config.backend) : null;
     // TODO(PHASE_2): call registerApp() here after exchanging apiKey for signing credentials
     registerApp(config.appId);
   }
@@ -50,6 +53,13 @@ export class AuthifyClient {
     const built = buildAuthUrl(this.config.appId, this.config.returnScheme, opts.userIdentifier);
     this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
     trackEvent('auth_request', { appId: this.config.appId });
+
+    if (this.backendClient) {
+      void this.backendClient.initiateRequest(built.requestId, []).catch((err: unknown) => {
+        this.emitError({ code: 'UNKNOWN', message: `Backend initiate failed: ${String(err)}` });
+      });
+    }
+
     void this.openUrl(built.url).catch((err: unknown) => {
       this.pendingRequests.delete(built.requestId);
       this.emitError({ code: 'UNKNOWN', message: `Failed to open Authify: ${String(err)}` });
@@ -61,6 +71,13 @@ export class AuthifyClient {
     const built = buildShareUrl(this.config.appId, this.config.returnScheme, fields);
     this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
     trackEvent('identity_request', { appId: this.config.appId, fields });
+
+    if (this.backendClient) {
+      void this.backendClient.initiateRequest(built.requestId, fields).catch((err: unknown) => {
+        this.emitError({ code: 'UNKNOWN', message: `Backend initiate failed: ${String(err)}` });
+      });
+    }
+
     void this.openUrl(built.url).catch((err: unknown) => {
       this.pendingRequests.delete(built.requestId);
       this.emitError({ code: 'UNKNOWN', message: `Failed to open Authify: ${String(err)}` });
@@ -78,9 +95,16 @@ export class AuthifyClient {
     const result = parseCallback(url, this.pendingRequests);
     if (result.ok) {
       trackEvent('callback_success', { appId: this.config.appId, requestId: result.response.requestId });
+      if (this.backendClient) {
+        void this.backendClient.completeRequest(result.response.requestId, 'completed');
+      }
       this.emitSuccess(result.response);
     } else {
       trackEvent('callback_error', { appId: this.config.appId, code: result.error.code });
+      const requestId = (result as { requestId?: string }).requestId ?? '';
+      if (this.backendClient && requestId) {
+        void this.backendClient.completeRequest(requestId, 'failed');
+      }
       this.emitError(result.error);
     }
     return true;

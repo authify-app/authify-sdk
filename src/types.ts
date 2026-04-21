@@ -78,4 +78,19 @@ export interface AuthifyError {
 export interface AuthifyConfig {
   appId: string;
   returnScheme: string; // URL scheme your app handles, e.g. "testauthify"
+  backend?: BackendConfig; // optional; if absent, SDK works as today (pure deep links)
+}
+
+// ── Backend control plane config ─────────────────────────────────────────────
+
+/**
+ * Configuration for the authify-backend control plane.
+ * appId and appSecret come from POST /apps/register.
+ * Note: BackendConfig.appId is the UUID from the control plane,
+ * distinct from AuthifyConfig.appId (the mobile app identifier).
+ */
+export interface BackendConfig {
+  url: string;       // e.g. "http://localhost:3000"
+  appId: string;     // UUID from POST /apps/register
+  appSecret: string; // hex secret — HMAC signing key
 }

@@ -4,6 +4,7 @@ exports.AuthifyClient = void 0;
 const builder_1 = require("./deeplink/builder");
 const parser_1 = require("./deeplink/parser");
 const stubs_1 = require("./monetization/stubs");
+const backendClient_1 = require("./utils/backendClient");
 /**
  * AuthifyClient — main entry point for the Authify SDK.
  *
@@ -29,6 +30,7 @@ class AuthifyClient {
         this.errorCallbacks = [];
         this.config = config;
         this.openUrl = openUrl;
+        this.backendClient = config.backend ? new backendClient_1.BackendClient(config.backend) : null;
         // TODO(PHASE_2): call registerApp() here after exchanging apiKey for signing credentials
         (0, stubs_1.registerApp)(config.appId);
     }
@@ -38,6 +40,11 @@ class AuthifyClient {
         const built = (0, builder_1.buildAuthUrl)(this.config.appId, this.config.returnScheme, opts.userIdentifier);
         this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
         (0, stubs_1.trackEvent)('auth_request', { appId: this.config.appId });
+        if (this.backendClient) {
+            void this.backendClient.initiateRequest(built.requestId, []).catch((err) => {
+                this.emitError({ code: 'UNKNOWN', message: `Backend initiate failed: ${String(err)}` });
+            });
+        }
         void this.openUrl(built.url).catch((err) => {
             this.pendingRequests.delete(built.requestId);
             this.emitError({ code: 'UNKNOWN', message: `Failed to open Authify: ${String(err)}` });
@@ -48,6 +55,11 @@ class AuthifyClient {
         const built = (0, builder_1.buildShareUrl)(this.config.appId, this.config.returnScheme, fields);
         this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
         (0, stubs_1.trackEvent)('identity_request', { appId: this.config.appId, fields });
+        if (this.backendClient) {
+            void this.backendClient.initiateRequest(built.requestId, fields).catch((err) => {
+                this.emitError({ code: 'UNKNOWN', message: `Backend initiate failed: ${String(err)}` });
+            });
+        }
         void this.openUrl(built.url).catch((err) => {
             this.pendingRequests.delete(built.requestId);
             this.emitError({ code: 'UNKNOWN', message: `Failed to open Authify: ${String(err)}` });
@@ -64,10 +76,17 @@ class AuthifyClient {
         const result = (0, parser_1.parseCallback)(url, this.pendingRequests);
         if (result.ok) {
             (0, stubs_1.trackEvent)('callback_success', { appId: this.config.appId, requestId: result.response.requestId });
+            if (this.backendClient) {
+                void this.backendClient.completeRequest(result.response.requestId, 'completed');
+            }
             this.emitSuccess(result.response);
         }
         else {
             (0, stubs_1.trackEvent)('callback_error', { appId: this.config.appId, code: result.error.code });
+            const requestId = result.requestId ?? '';
+            if (this.backendClient && requestId) {
+                void this.backendClient.completeRequest(requestId, 'failed');
+            }
             this.emitError(result.error);
         }
         return true;

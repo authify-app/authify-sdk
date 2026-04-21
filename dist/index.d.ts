@@ -1,5 +1,5 @@
 export { AuthifyClient } from './AuthifyClient';
-export type { AuthifyConfig, AuthifyResponse, AuthifyError, IdentityField, SdkAuthRequest, SdkIdentityRequest, SdkRequest, SdkResponse, } from './types';
+export type { AuthifyConfig, BackendConfig, AuthifyResponse, AuthifyError, IdentityField, SdkAuthRequest, SdkIdentityRequest, SdkRequest, SdkResponse, } from './types';
 export { generateEphemeralKeyPair, computeSharedSecret } from './crypto/keyPair';
 export { toBase64Url, fromBase64Url } from './crypto/encrypt';
 export { sign, verify } from './crypto/signing';

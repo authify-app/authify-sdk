@@ -19,6 +19,7 @@ export type OpenUrlFn = (url: string) => Promise<void>;
 export declare class AuthifyClient {
     private readonly config;
     private readonly openUrl;
+    private readonly backendClient;
     /**
      * Map of requestId → SDK ephemeral private key hex.
      * Held in memory for the lifetime of a pending request.

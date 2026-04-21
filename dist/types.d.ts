@@ -44,5 +44,17 @@ export interface AuthifyError {
 export interface AuthifyConfig {
     appId: string;
     returnScheme: string;
+    backend?: BackendConfig;
+}
+/**
+ * Configuration for the authify-backend control plane.
+ * appId and appSecret come from POST /apps/register.
+ * Note: BackendConfig.appId is the UUID from the control plane,
+ * distinct from AuthifyConfig.appId (the mobile app identifier).
+ */
+export interface BackendConfig {
+    url: string;
+    appId: string;
+    appSecret: string;
 }
 //# sourceMappingURL=types.d.ts.map

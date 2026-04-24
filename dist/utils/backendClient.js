@@ -27,7 +27,7 @@ class BackendClient {
         this.backendPubKey = body.publicKey;
         return this.backendPubKey;
     }
-    async postEncrypted(path, body, timeoutMs = 5000) {
+    async postEncrypted(path, body, timeoutMs = 30000) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {

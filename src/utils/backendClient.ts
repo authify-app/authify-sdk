@@ -33,7 +33,7 @@ export class BackendClient {
   private async postEncrypted(
     path: string,
     body: object,
-    timeoutMs = 5000,
+    timeoutMs = 30000,
   ): Promise<void> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);

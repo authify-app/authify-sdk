@@ -112,6 +112,10 @@ export class BackendClient {
   }
 
   async fetchInitKeys(): Promise<{ authifyPublicKey: string; signingKey: string }> {
-    return this.getWithHmac<{ authifyPublicKey: string; signingKey: string }>('/apps/init');
+    const result = await this.getWithHmac<{ authifyPublicKey: string; signingKey: string }>('/apps/init');
+    if (!result.authifyPublicKey || !result.signingKey) {
+      throw new Error('[authify-sdk] /apps/init response missing authifyPublicKey or signingKey');
+    }
+    return result;
   }
 }

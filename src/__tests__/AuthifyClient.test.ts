@@ -148,6 +148,9 @@ describe('AuthifyClient.initialize()', () => {
 
     await client.initialize();
 
+    const priv = client as unknown as { authifyPublicKey: string | null; signingKey: string | null };
+    expect(priv.authifyPublicKey).toBe('026b8a39bc37c4e0c49c4cadd8194db65d6089be5ed9866b370714b48b92561f');
+    expect(priv.signingKey).toBe('1d69f40e6c2e302fd0bd091800df4171343717582f13d1a265bbc4230be7829a');
     expect(() => client.login()).not.toThrow();
   });
 

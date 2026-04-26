@@ -12,6 +12,6 @@
  *   POST /v1/apps/{appId}/plan { planId }
  */
 export declare function registerApp(_appId?: string): void;
-export declare function trackEvent(type: string, _payload?: Record<string, unknown>): void;
-export declare function setPlan(planId: string): void;
+export declare function trackEvent(_type: string, _payload?: Record<string, unknown>): void;
+export declare function setPlan(_planId: string): void;
 //# sourceMappingURL=stubs.d.ts.map

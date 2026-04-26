@@ -18,14 +18,11 @@ exports.trackEvent = trackEvent;
 exports.setPlan = setPlan;
 function registerApp(_appId) {
     // TODO(PHASE_2): call control plane to register app and exchange API key for signing key
-    console.log('[AuthifySDK] registerApp() — no-op in Phase 1');
 }
-function trackEvent(type, _payload) {
+function trackEvent(_type, _payload) {
     // TODO(PHASE_2): send usage event to billing backend
-    console.log(`[AuthifySDK] trackEvent(${type}) — no-op in Phase 1`);
 }
-function setPlan(planId) {
+function setPlan(_planId) {
     // TODO(PHASE_2): call control plane to set billing plan
-    console.log(`[AuthifySDK] setPlan(${planId}) — no-op in Phase 1`);
 }
 //# sourceMappingURL=stubs.js.map

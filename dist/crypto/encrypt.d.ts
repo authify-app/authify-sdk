@@ -2,7 +2,7 @@
  * Derive a 256-bit AES key from an X25519 shared secret using HKDF-SHA256.
  * salt distinguishes request vs. response direction.
  */
-declare function deriveKey(sharedSecret: Uint8Array, salt: string): Uint8Array;
+declare function deriveKey(sharedSecret: Uint8Array, info: string): Uint8Array;
 /**
  * AES-256-GCM encrypt. Returns `nonce || ciphertext` concatenated as Uint8Array.
  * The 12-byte nonce is prepended so the decryptor can extract it without side-channel.

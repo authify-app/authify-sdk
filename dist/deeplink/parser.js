@@ -28,9 +28,7 @@ function parseCallback(url, pendingRequests) {
         if (!pk || !c || !s) {
             return { ok: false, error: { code: 'UNKNOWN', message: 'Missing pk, c, or s param' } };
         }
-        // 1. Verify HMAC signature (covers path + pk + c)
-        const pathAndQuery = url.slice(url.indexOf('//') + 2);
-        const signedPart = pathAndQuery.slice(0, pathAndQuery.lastIndexOf('&s='));
+        // 1. Verify HMAC signature — signs the full URL up to (not including) &s=
         if (!(0, signing_1.verify)(url.slice(0, url.lastIndexOf('&s=')), s)) {
             return { ok: false, error: { code: 'INVALID_SIGNATURE', message: 'HMAC verification failed' } };
         }

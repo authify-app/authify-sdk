@@ -78,6 +78,10 @@ describe('pendingRequests TTL', () => {
     );
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('entries within TTL survive pruning', () => {
     client.login();
     const map = (client as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests;
@@ -97,8 +101,6 @@ describe('pendingRequests TTL', () => {
     expect(map.size).toBe(1);
     client.login(); // triggers prune
     expect(map.size).toBe(1); // stale pruned, new one added
-
-    jest.restoreAllMocks();
   });
 
   it('stale entries are pruned on handleCallback()', () => {
@@ -111,7 +113,5 @@ describe('pendingRequests TTL', () => {
     expect(map.size).toBe(1);
     client.handleCallback('myapp://authify-callback?pk=x&c=y&s=z');
     expect(map.size).toBe(0); // pruned by handleCallback
-
-    jest.restoreAllMocks();
   });
 });

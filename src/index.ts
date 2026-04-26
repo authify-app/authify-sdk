@@ -20,3 +20,4 @@ export { generateNonce, addNonce, hasNonce } from './session/nonceStore';
 // Deep link helpers (for testing/advanced use)
 export { buildAuthUrl, buildShareUrl } from './deeplink/builder';
 export { parseCallback } from './deeplink/parser';
+export type { PendingEntry } from './deeplink/parser';

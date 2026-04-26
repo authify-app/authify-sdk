@@ -7,11 +7,12 @@ const encrypt_1 = require("../crypto/encrypt");
 const signing_1 = require("../crypto/signing");
 const nonceStore_1 = require("../session/nonceStore");
 function generateRequestId() {
-    // UUID v4 via random bytes (crypto.getRandomValues available in RN)
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = (Math.random() * 16) | 0;
-        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-    });
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    b[6] = (b[6] & 0x0f) | 0x40; // version 4
+    b[8] = (b[8] & 0x3f) | 0x80; // variant
+    const h = Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 /**
  * Build a signed, encrypted authify://auth/v1 deep link.

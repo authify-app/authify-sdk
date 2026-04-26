@@ -19,8 +19,8 @@ const GCM_NONCE_LEN = 12;
  * Derive a 256-bit AES key from an X25519 shared secret using HKDF-SHA256.
  * salt distinguishes request vs. response direction.
  */
-function deriveKey(sharedSecret, salt) {
-    return (0, hkdf_1.hkdf)(sha2_1.sha256, sharedSecret, undefined, (0, utils_1.utf8ToBytes)(salt), AES_KEY_LEN);
+function deriveKey(sharedSecret, info) {
+    return (0, hkdf_1.hkdf)(sha2_1.sha256, sharedSecret, new Uint8Array(0), (0, utils_1.utf8ToBytes)(info), AES_KEY_LEN);
 }
 /**
  * AES-256-GCM encrypt. Returns `nonce || ciphertext` concatenated as Uint8Array.

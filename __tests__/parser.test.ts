@@ -65,7 +65,7 @@ function buildCallbackUrl(sdkEphPubKeyHex: string, opts: CallbackOpts = {}): str
 
   // ECDH(authifyEphPriv, sdkEphPub) → HKDF("authify-response-v1") → AES key
   const sharedSecret = x25519.getSharedSecret(authifyEphPriv, hexToBytes(sdkEphPubKeyHex));
-  const encKey = hkdf(sha256, sharedSecret, undefined, utf8ToBytes('authify-response-v1'), 32);
+  const encKey = hkdf(sha256, sharedSecret, new Uint8Array(0), utf8ToBytes('authify-response-v1'), 32);
 
   // AES-256-GCM encrypt
   const gcmNonce = randomBytes(12);

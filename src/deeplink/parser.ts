@@ -20,10 +20,12 @@ export type ParseResult =
  *
  * @param url  The raw deep link URL received by the caller app
  * @param pendingRequests  Map of requestId → sdkEphemeralPrivKeyHex (held by AuthifyClient)
+ * @param signingKey  Per-app HMAC signing key (hex). Omit to use the DEV_ONLY key.
  */
 export function parseCallback(
   url: string,
   pendingRequests: Map<string, PendingEntry>,
+  signingKey?: string,
 ): ParseResult {
   try {
     if (!url.includes('authify-callback')) {
@@ -45,7 +47,7 @@ export function parseCallback(
     }
 
     // 1. Verify HMAC signature — signs the full URL up to (not including) &s=
-    if (!verify(url.slice(0, url.lastIndexOf('&s=')), s)) {
+    if (!verify(url.slice(0, url.lastIndexOf('&s=')), s, signingKey)) {
       return { ok: false, error: { code: 'INVALID_SIGNATURE', message: 'HMAC verification failed' } };
     }
 

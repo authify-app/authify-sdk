@@ -14,15 +14,12 @@
 
 export function registerApp(_appId?: string): void {
   // TODO(PHASE_2): call control plane to register app and exchange API key for signing key
-  console.log('[AuthifySDK] registerApp() — no-op in Phase 1');
 }
 
-export function trackEvent(type: string, _payload?: Record<string, unknown>): void {
+export function trackEvent(_type: string, _payload?: Record<string, unknown>): void {
   // TODO(PHASE_2): send usage event to billing backend
-  console.log(`[AuthifySDK] trackEvent(${type}) — no-op in Phase 1`);
 }
 
-export function setPlan(planId: string): void {
+export function setPlan(_planId: string): void {
   // TODO(PHASE_2): call control plane to set billing plan
-  console.log(`[AuthifySDK] setPlan(${planId}) — no-op in Phase 1`);
 }

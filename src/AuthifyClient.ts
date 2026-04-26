@@ -1,5 +1,5 @@
 import { buildAuthUrl, buildShareUrl } from './deeplink/builder';
-import { parseCallback } from './deeplink/parser';
+import { parseCallback, PendingEntry } from './deeplink/parser';
 import { registerApp, trackEvent, setPlan } from './monetization/stubs';
 import { BackendClient } from './utils/backendClient';
 import { AuthifyConfig, AuthifyResponse, AuthifyError, IdentityField } from './types';
@@ -28,12 +28,15 @@ export class AuthifyClient {
   private readonly openUrl: OpenUrlFn;
   private readonly backendClient: BackendClient | null;
 
+  private static readonly PENDING_TTL_MS = 5 * 60 * 1000;
+
   /**
-   * Map of requestId → SDK ephemeral private key hex.
+   * Map of requestId → PendingEntry (ephemeral private key + expiry).
    * Held in memory for the lifetime of a pending request.
    * Used by parseCallback to decrypt the matched response.
+   * Entries older than PENDING_TTL_MS are pruned on the next login/handleCallback call.
    */
-  private readonly pendingRequests = new Map<string, string>();
+  private readonly pendingRequests = new Map<string, PendingEntry>();
 
   private successCallbacks: SuccessCallback[] = [];
   private errorCallbacks: ErrorCallback[] = [];
@@ -51,7 +54,11 @@ export class AuthifyClient {
   /** Initiate a login / authentication request against Authify. */
   login(opts: { userIdentifier?: string } = {}): void {
     const built = buildAuthUrl(this.config.appId, this.config.returnScheme, opts.userIdentifier);
-    this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
+    this.prunePendingRequests();
+    this.pendingRequests.set(built.requestId, {
+      privateKeyHex: built.keyPair.privateKeyHex,
+      expiresAt: Date.now() + AuthifyClient.PENDING_TTL_MS,
+    });
     trackEvent('auth_request', { appId: this.config.appId });
 
     if (this.backendClient) {
@@ -69,7 +76,11 @@ export class AuthifyClient {
   /** Initiate an identity attribute request against Authify. */
   requestIdentity(fields: IdentityField[]): void {
     const built = buildShareUrl(this.config.appId, this.config.returnScheme, fields);
-    this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
+    this.prunePendingRequests();
+    this.pendingRequests.set(built.requestId, {
+      privateKeyHex: built.keyPair.privateKeyHex,
+      expiresAt: Date.now() + AuthifyClient.PENDING_TTL_MS,
+    });
     trackEvent('identity_request', { appId: this.config.appId, fields });
 
     if (this.backendClient) {
@@ -91,7 +102,7 @@ export class AuthifyClient {
    */
   handleCallback(url: string): boolean {
     if (!url.includes('authify-callback')) return false;
-
+    this.prunePendingRequests();
     const result = parseCallback(url, this.pendingRequests);
     if (result.ok) {
       trackEvent('callback_success', { appId: this.config.appId, requestId: result.response.requestId });
@@ -156,6 +167,13 @@ export class AuthifyClient {
   }
 
   // ── Private ─────────────────────────────────────────────────────────────────
+
+  private prunePendingRequests(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.pendingRequests) {
+      if (now > entry.expiresAt) this.pendingRequests.delete(id);
+    }
+  }
 
   private emitSuccess(response: AuthifyResponse): void {
     for (const cb of this.successCallbacks) cb(response);

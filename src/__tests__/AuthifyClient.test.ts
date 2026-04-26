@@ -65,3 +65,53 @@ describe('AuthifyClient with backend config', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('pendingRequests TTL', () => {
+  let mockOpenUrl: jest.Mock;
+  let client: AuthifyClient;
+
+  beforeEach(() => {
+    mockOpenUrl = jest.fn().mockResolvedValue(undefined);
+    client = new AuthifyClient(
+      { appId: 'com.test', returnScheme: 'test' },
+      mockOpenUrl,
+    );
+  });
+
+  it('entries within TTL survive pruning', () => {
+    client.login();
+    const map = (client as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests;
+    expect(map.size).toBe(1);
+    // Second login triggers prune — fresh entry survives
+    client.login();
+    expect(map.size).toBe(2);
+  });
+
+  it('entries older than 5 minutes are pruned on next login()', () => {
+    const realNow = Date.now();
+    jest.spyOn(Date, 'now').mockReturnValue(realNow - 6 * 60 * 1000);
+    client.login();
+    jest.spyOn(Date, 'now').mockReturnValue(realNow);
+
+    const map = (client as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests;
+    expect(map.size).toBe(1);
+    client.login(); // triggers prune
+    expect(map.size).toBe(1); // stale pruned, new one added
+
+    jest.restoreAllMocks();
+  });
+
+  it('stale entries are pruned on handleCallback()', () => {
+    const realNow = Date.now();
+    jest.spyOn(Date, 'now').mockReturnValue(realNow - 6 * 60 * 1000);
+    client.login();
+    jest.spyOn(Date, 'now').mockReturnValue(realNow);
+
+    const map = (client as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests;
+    expect(map.size).toBe(1);
+    client.handleCallback('myapp://authify-callback?pk=x&c=y&s=z');
+    expect(map.size).toBe(0); // pruned by handleCallback
+
+    jest.restoreAllMocks();
+  });
+});

@@ -5,6 +5,11 @@ import { SdkResponse, AuthifyResponse, AuthifyError } from '../types';
 
 const MAX_AGE_SECONDS = 300; // 5 minutes
 
+export interface PendingEntry {
+  privateKeyHex: string;
+  expiresAt: number;
+}
+
 export type ParseResult =
   | { ok: true; response: AuthifyResponse }
   | { ok: false; error: AuthifyError };
@@ -18,7 +23,7 @@ export type ParseResult =
  */
 export function parseCallback(
   url: string,
-  pendingRequests: Map<string, string>,
+  pendingRequests: Map<string, PendingEntry>,
 ): ParseResult {
   try {
     if (!url.includes('authify-callback')) {
@@ -49,9 +54,9 @@ export function parseCallback(
     let decrypted: SdkResponse | null = null;
     let matchedRequestId: string | null = null;
 
-    for (const [requestId, sdkEphPrivKeyHex] of pendingRequests.entries()) {
+    for (const [requestId, entry] of pendingRequests.entries()) {
       try {
-        const plaintext = decryptResponse(c, pk, sdkEphPrivKeyHex);
+        const plaintext = decryptResponse(c, pk, entry.privateKeyHex);
         const parsed = JSON.parse(plaintext) as SdkResponse;
         if (parsed.requestId === requestId) {
           decrypted = parsed;

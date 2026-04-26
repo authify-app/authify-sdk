@@ -20,10 +20,14 @@ const backendClient_1 = require("./utils/backendClient");
  */
 class AuthifyClient {
     constructor(config, openUrl) {
+        this.authifyPublicKey = null;
+        this.signingKey = null;
+        this.initializePromise = null;
         /**
-         * Map of requestId → SDK ephemeral private key hex.
+         * Map of requestId → PendingEntry (ephemeral private key + expiry).
          * Held in memory for the lifetime of a pending request.
          * Used by parseCallback to decrypt the matched response.
+         * Entries older than PENDING_TTL_MS are pruned on the next login/handleCallback call.
          */
         this.pendingRequests = new Map();
         this.successCallbacks = [];
@@ -35,10 +39,37 @@ class AuthifyClient {
         (0, stubs_1.registerApp)(config.appId);
     }
     // ── Public API ──────────────────────────────────────────────────────────────
+    /**
+     * Fetch per-app cryptographic keys from the backend control plane and store them.
+     * Must be called once after construction when a backend config is provided.
+     * In dev/test (no backend config), resolves silently.
+     * In production (NODE_ENV=production) without backend config, throws.
+     */
+    async initialize() {
+        if (this.initializePromise)
+            return this.initializePromise;
+        this.initializePromise = this._doInitialize();
+        return this.initializePromise;
+    }
+    async _doInitialize() {
+        if (!this.backendClient) {
+            if (process.env.NODE_ENV === 'production') {
+                throw new Error('[authify-sdk] initialize() requires backend config in production');
+            }
+            return;
+        }
+        const { authifyPublicKey, signingKey } = await this.backendClient.fetchInitKeys();
+        this.authifyPublicKey = authifyPublicKey;
+        this.signingKey = signingKey;
+    }
     /** Initiate a login / authentication request against Authify. */
     login(opts = {}) {
-        const built = (0, builder_1.buildAuthUrl)(this.config.appId, this.config.returnScheme, opts.userIdentifier);
-        this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
+        const built = (0, builder_1.buildAuthUrl)(this.config.appId, this.config.returnScheme, opts.userIdentifier, this.authifyPublicKey ?? undefined, this.signingKey ?? undefined);
+        this.prunePendingRequests();
+        this.pendingRequests.set(built.requestId, {
+            privateKeyHex: built.keyPair.privateKeyHex,
+            expiresAt: Date.now() + AuthifyClient.PENDING_TTL_MS,
+        });
         (0, stubs_1.trackEvent)('auth_request', { appId: this.config.appId });
         if (this.backendClient) {
             void this.backendClient.initiateRequest(built.requestId, []).catch((err) => {
@@ -52,8 +83,12 @@ class AuthifyClient {
     }
     /** Initiate an identity attribute request against Authify. */
     requestIdentity(fields) {
-        const built = (0, builder_1.buildShareUrl)(this.config.appId, this.config.returnScheme, fields);
-        this.pendingRequests.set(built.requestId, built.keyPair.privateKeyHex);
+        const built = (0, builder_1.buildShareUrl)(this.config.appId, this.config.returnScheme, fields, this.authifyPublicKey ?? undefined, this.signingKey ?? undefined);
+        this.prunePendingRequests();
+        this.pendingRequests.set(built.requestId, {
+            privateKeyHex: built.keyPair.privateKeyHex,
+            expiresAt: Date.now() + AuthifyClient.PENDING_TTL_MS,
+        });
         (0, stubs_1.trackEvent)('identity_request', { appId: this.config.appId, fields });
         if (this.backendClient) {
             void this.backendClient.initiateRequest(built.requestId, fields).catch((err) => {
@@ -73,7 +108,8 @@ class AuthifyClient {
     handleCallback(url) {
         if (!url.includes('authify-callback'))
             return false;
-        const result = (0, parser_1.parseCallback)(url, this.pendingRequests);
+        this.prunePendingRequests();
+        const result = (0, parser_1.parseCallback)(url, this.pendingRequests, this.signingKey ?? undefined);
         if (result.ok) {
             (0, stubs_1.trackEvent)('callback_success', { appId: this.config.appId, requestId: result.response.requestId });
             if (this.backendClient) {
@@ -131,6 +167,13 @@ class AuthifyClient {
         (0, stubs_1.setPlan)(planId);
     }
     // ── Private ─────────────────────────────────────────────────────────────────
+    prunePendingRequests() {
+        const now = Date.now();
+        for (const [id, entry] of this.pendingRequests) {
+            if (now > entry.expiresAt)
+                this.pendingRequests.delete(id);
+        }
+    }
     emitSuccess(response) {
         for (const cb of this.successCallbacks)
             cb(response);
@@ -141,4 +184,5 @@ class AuthifyClient {
     }
 }
 exports.AuthifyClient = AuthifyClient;
+AuthifyClient.PENDING_TTL_MS = 5 * 60 * 1000;
 //# sourceMappingURL=AuthifyClient.js.map

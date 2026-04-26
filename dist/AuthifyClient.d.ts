@@ -20,15 +20,28 @@ export declare class AuthifyClient {
     private readonly config;
     private readonly openUrl;
     private readonly backendClient;
+    private authifyPublicKey;
+    private signingKey;
+    private initializePromise;
+    private static readonly PENDING_TTL_MS;
     /**
-     * Map of requestId → SDK ephemeral private key hex.
+     * Map of requestId → PendingEntry (ephemeral private key + expiry).
      * Held in memory for the lifetime of a pending request.
      * Used by parseCallback to decrypt the matched response.
+     * Entries older than PENDING_TTL_MS are pruned on the next login/handleCallback call.
      */
     private readonly pendingRequests;
     private successCallbacks;
     private errorCallbacks;
     constructor(config: AuthifyConfig, openUrl: OpenUrlFn);
+    /**
+     * Fetch per-app cryptographic keys from the backend control plane and store them.
+     * Must be called once after construction when a backend config is provided.
+     * In dev/test (no backend config), resolves silently.
+     * In production (NODE_ENV=production) without backend config, throws.
+     */
+    initialize(): Promise<void>;
+    private _doInitialize;
     /** Initiate a login / authentication request against Authify. */
     login(opts?: {
         userIdentifier?: string;
@@ -63,6 +76,7 @@ export declare class AuthifyClient {
      * TODO(PHASE_2): call control plane POST /v1/apps/{appId}/plan
      */
     setPlan(planId: string): void;
+    private prunePendingRequests;
     private emitSuccess;
     private emitError;
 }

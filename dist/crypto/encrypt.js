@@ -63,10 +63,12 @@ function fromBase64Url(str) {
  *
  * @param plaintext  JSON-serialized request object
  * @param sdkEphPrivKeyHex  SDK's ephemeral private key (hex)
+ * @param authifyPublicKeyHex  Authify's public key (hex). Omit to use the DEV_ONLY key.
  * @returns base64url-encoded `nonce || ciphertext`
  */
-function encryptRequest(plaintext, sdkEphPrivKeyHex) {
-    const sharedSecret = (0, keyPair_1.computeSharedSecret)(sdkEphPrivKeyHex, devKeys_1.AUTHIFY_DEV_PUBLIC_KEY);
+function encryptRequest(plaintext, sdkEphPrivKeyHex, authifyPublicKeyHex) {
+    const pubKey = authifyPublicKeyHex ?? devKeys_1.AUTHIFY_DEV_PUBLIC_KEY;
+    const sharedSecret = (0, keyPair_1.computeSharedSecret)(sdkEphPrivKeyHex, pubKey);
     const key = deriveKey(sharedSecret, 'authify-request-v1');
     const encrypted = aesGcmEncrypt(key, (0, utils_1.utf8ToBytes)(plaintext));
     return toBase64Url(encrypted);

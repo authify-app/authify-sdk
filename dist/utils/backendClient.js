@@ -71,6 +71,42 @@ class BackendClient {
             status,
         });
     }
+    async getWithHmac(path, timeoutMs = 10000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const timestamp = Date.now().toString();
+            const bodyHash = sha256Hex('{}');
+            const signature = hmacSign(`${this.config.appId}:${timestamp}:${bodyHash}`, this.config.appSecret);
+            const res = await fetch(`${this.config.url}${path}`, {
+                method: 'GET',
+                headers: {
+                    'X-Authify-App-Id': this.config.appId,
+                    'X-Authify-Timestamp': timestamp,
+                    'X-Authify-Signature': signature,
+                },
+                signal: controller.signal,
+            });
+            if (!res.ok)
+                throw new Error(`${path} failed: ${res.status}`);
+            try {
+                return await res.json();
+            }
+            catch {
+                throw new Error(`${path} returned non-JSON body (status ${res.status})`);
+            }
+        }
+        finally {
+            clearTimeout(timer);
+        }
+    }
+    async fetchInitKeys() {
+        const result = await this.getWithHmac('/apps/init');
+        if (!result.authifyPublicKey || !result.signingKey) {
+            throw new Error('[authify-sdk] /apps/init response missing authifyPublicKey or signingKey');
+        }
+        return result;
+    }
 }
 exports.BackendClient = BackendClient;
 //# sourceMappingURL=backendClient.js.map

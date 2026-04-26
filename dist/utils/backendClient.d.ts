@@ -7,5 +7,10 @@ export declare class BackendClient {
     private postEncrypted;
     initiateRequest(requestId: string, requestedFields: string[]): Promise<void>;
     completeRequest(requestId: string, status: 'completed' | 'failed'): Promise<void>;
+    private getWithHmac;
+    fetchInitKeys(): Promise<{
+        authifyPublicKey: string;
+        signingKey: string;
+    }>;
 }
 //# sourceMappingURL=backendClient.d.ts.map

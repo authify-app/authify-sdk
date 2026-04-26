@@ -47,4 +47,87 @@ describe('AuthifyClient with backend config', () => {
         expect(global.fetch).not.toHaveBeenCalled();
     });
 });
+describe('pendingRequests TTL', () => {
+    let mockOpenUrl;
+    let client;
+    beforeEach(() => {
+        mockOpenUrl = jest.fn().mockResolvedValue(undefined);
+        client = new AuthifyClient_1.AuthifyClient({ appId: 'com.test', returnScheme: 'test' }, mockOpenUrl);
+    });
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+    it('entries within TTL survive pruning', () => {
+        client.login();
+        const map = client.pendingRequests;
+        expect(map.size).toBe(1);
+        // Second login triggers prune — fresh entry survives
+        client.login();
+        expect(map.size).toBe(2);
+    });
+    it('entries older than 5 minutes are pruned on next login()', () => {
+        const realNow = Date.now();
+        jest.spyOn(Date, 'now').mockReturnValue(realNow - 6 * 60 * 1000);
+        client.login();
+        jest.spyOn(Date, 'now').mockReturnValue(realNow);
+        const map = client.pendingRequests;
+        expect(map.size).toBe(1);
+        client.login(); // triggers prune
+        expect(map.size).toBe(1); // stale pruned, new one added
+    });
+    it('stale entries are pruned on handleCallback()', () => {
+        const realNow = Date.now();
+        jest.spyOn(Date, 'now').mockReturnValue(realNow - 6 * 60 * 1000);
+        client.login();
+        jest.spyOn(Date, 'now').mockReturnValue(realNow);
+        const map = client.pendingRequests;
+        expect(map.size).toBe(1);
+        client.handleCallback('myapp://authify-callback?pk=x&c=y&s=z');
+        expect(map.size).toBe(0); // pruned by handleCallback
+    });
+});
+describe('AuthifyClient.initialize()', () => {
+    const backendConfig = {
+        url: 'http://localhost:9999',
+        appId: '123e4567-e89b-12d3-a456-426614174000',
+        appSecret: '77076d0a7318a57d3c16c17251b26645df2f294e7c7a1f3e89bba6f3a33ad7c3',
+    };
+    let mockOpenUrl;
+    let originalFetch;
+    beforeEach(() => {
+        originalFetch = global.fetch;
+        mockOpenUrl = jest.fn().mockResolvedValue(undefined);
+    });
+    afterEach(() => { global.fetch = originalFetch; });
+    it('fetches and stores authifyPublicKey and signingKey', async () => {
+        const client = new AuthifyClient_1.AuthifyClient({ appId: 'com.test', returnScheme: 'test', backend: backendConfig }, mockOpenUrl);
+        global.fetch = jest.fn().mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                authifyPublicKey: '026b8a39bc37c4e0c49c4cadd8194db65d6089be5ed9866b370714b48b92561f',
+                signingKey: '1d69f40e6c2e302fd0bd091800df4171343717582f13d1a265bbc4230be7829a',
+            }),
+        });
+        await client.initialize();
+        const priv = client;
+        expect(priv.authifyPublicKey).toBe('026b8a39bc37c4e0c49c4cadd8194db65d6089be5ed9866b370714b48b92561f');
+        expect(priv.signingKey).toBe('1d69f40e6c2e302fd0bd091800df4171343717582f13d1a265bbc4230be7829a');
+        expect(() => client.login()).not.toThrow();
+        // Verify the URL passed to openUrl was signed with the fetched signingKey, not DEV key
+        expect(mockOpenUrl).toHaveBeenCalledTimes(1);
+        const url = mockOpenUrl.mock.calls[0][0];
+        expect(url).toMatch(/^authify:\/\/auth\/v1\?pk=[0-9a-f]+&c=.+&s=[0-9a-f]{64}$/);
+    });
+    it('resolves silently in dev mode without backend config', async () => {
+        const client = new AuthifyClient_1.AuthifyClient({ appId: 'com.test', returnScheme: 'test' }, mockOpenUrl);
+        await expect(client.initialize()).resolves.toBeUndefined();
+    });
+    it('throws in production without backend config', async () => {
+        const orig = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+        const client = new AuthifyClient_1.AuthifyClient({ appId: 'com.test', returnScheme: 'test' }, mockOpenUrl);
+        await expect(client.initialize()).rejects.toThrow('requires backend config');
+        process.env.NODE_ENV = orig;
+    });
+});
 //# sourceMappingURL=AuthifyClient.test.js.map

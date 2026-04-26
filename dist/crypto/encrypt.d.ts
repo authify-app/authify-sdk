@@ -23,9 +23,10 @@ export declare function fromBase64Url(str: string): Uint8Array;
  *
  * @param plaintext  JSON-serialized request object
  * @param sdkEphPrivKeyHex  SDK's ephemeral private key (hex)
+ * @param authifyPublicKeyHex  Authify's public key (hex). Omit to use the DEV_ONLY key.
  * @returns base64url-encoded `nonce || ciphertext`
  */
-export declare function encryptRequest(plaintext: string, sdkEphPrivKeyHex: string): string;
+export declare function encryptRequest(plaintext: string, sdkEphPrivKeyHex: string, authifyPublicKeyHex?: string): string;
 /**
  * Decrypt a response payload from Authify.
  * Uses the SDK's stored ephemeral private key + Authify's response ephemeral public key.

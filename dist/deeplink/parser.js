@@ -11,8 +11,9 @@ const MAX_AGE_SECONDS = 300; // 5 minutes
  *
  * @param url  The raw deep link URL received by the caller app
  * @param pendingRequests  Map of requestId → sdkEphemeralPrivKeyHex (held by AuthifyClient)
+ * @param signingKey  Per-app HMAC signing key (hex). Omit to use the DEV_ONLY key.
  */
-function parseCallback(url, pendingRequests) {
+function parseCallback(url, pendingRequests, signingKey) {
     try {
         if (!url.includes('authify-callback')) {
             return { ok: false, error: { code: 'UNKNOWN', message: 'Not an authify callback URL' } };
@@ -29,16 +30,16 @@ function parseCallback(url, pendingRequests) {
             return { ok: false, error: { code: 'UNKNOWN', message: 'Missing pk, c, or s param' } };
         }
         // 1. Verify HMAC signature — signs the full URL up to (not including) &s=
-        if (!(0, signing_1.verify)(url.slice(0, url.lastIndexOf('&s=')), s)) {
+        if (!(0, signing_1.verify)(url.slice(0, url.lastIndexOf('&s=')), s, signingKey)) {
             return { ok: false, error: { code: 'INVALID_SIGNATURE', message: 'HMAC verification failed' } };
         }
         // 2. Find a pending request to determine which ephemeral key to use for decryption.
         //    We try each pending request; the matching one will decrypt successfully.
         let decrypted = null;
         let matchedRequestId = null;
-        for (const [requestId, sdkEphPrivKeyHex] of pendingRequests.entries()) {
+        for (const [requestId, entry] of pendingRequests.entries()) {
             try {
-                const plaintext = (0, encrypt_1.decryptResponse)(c, pk, sdkEphPrivKeyHex);
+                const plaintext = (0, encrypt_1.decryptResponse)(c, pk, entry.privateKeyHex);
                 const parsed = JSON.parse(plaintext);
                 if (parsed.requestId === requestId) {
                     decrypted = parsed;

@@ -27,6 +27,8 @@ export class AuthifyClient {
   private readonly config: AuthifyConfig;
   private readonly openUrl: OpenUrlFn;
   private readonly backendClient: BackendClient | null;
+  private authifyPublicKey: string | null = null;
+  private signingKey: string | null = null;
 
   private static readonly PENDING_TTL_MS = 5 * 60 * 1000;
 
@@ -51,9 +53,33 @@ export class AuthifyClient {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
+  /**
+   * Fetch per-app cryptographic keys from the backend control plane and store them.
+   * Must be called once after construction when a backend config is provided.
+   * In dev/test (no backend config), resolves silently.
+   * In production (NODE_ENV=production) without backend config, throws.
+   */
+  async initialize(): Promise<void> {
+    if (!this.backendClient) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('[authify-sdk] initialize() requires backend config in production');
+      }
+      return;
+    }
+    const { authifyPublicKey, signingKey } = await this.backendClient.fetchInitKeys();
+    this.authifyPublicKey = authifyPublicKey;
+    this.signingKey = signingKey;
+  }
+
   /** Initiate a login / authentication request against Authify. */
   login(opts: { userIdentifier?: string } = {}): void {
-    const built = buildAuthUrl(this.config.appId, this.config.returnScheme, opts.userIdentifier);
+    const built = buildAuthUrl(
+      this.config.appId,
+      this.config.returnScheme,
+      opts.userIdentifier,
+      this.authifyPublicKey ?? undefined,
+      this.signingKey ?? undefined,
+    );
     this.prunePendingRequests();
     this.pendingRequests.set(built.requestId, {
       privateKeyHex: built.keyPair.privateKeyHex,
@@ -75,7 +101,13 @@ export class AuthifyClient {
 
   /** Initiate an identity attribute request against Authify. */
   requestIdentity(fields: IdentityField[]): void {
-    const built = buildShareUrl(this.config.appId, this.config.returnScheme, fields);
+    const built = buildShareUrl(
+      this.config.appId,
+      this.config.returnScheme,
+      fields,
+      this.authifyPublicKey ?? undefined,
+      this.signingKey ?? undefined,
+    );
     this.prunePendingRequests();
     this.pendingRequests.set(built.requestId, {
       privateKeyHex: built.keyPair.privateKeyHex,
@@ -103,7 +135,7 @@ export class AuthifyClient {
   handleCallback(url: string): boolean {
     if (!url.includes('authify-callback')) return false;
     this.prunePendingRequests();
-    const result = parseCallback(url, this.pendingRequests);
+    const result = parseCallback(url, this.pendingRequests, this.signingKey ?? undefined);
     if (result.ok) {
       trackEvent('callback_success', { appId: this.config.appId, requestId: result.response.requestId });
       if (this.backendClient) {

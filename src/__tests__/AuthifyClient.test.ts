@@ -115,3 +115,58 @@ describe('pendingRequests TTL', () => {
     expect(map.size).toBe(0); // pruned by handleCallback
   });
 });
+
+describe('AuthifyClient.initialize()', () => {
+  const backendConfig = {
+    url: 'http://localhost:9999',
+    appId: '123e4567-e89b-12d3-a456-426614174000',
+    appSecret: '77076d0a7318a57d3c16c17251b26645df2f294e7c7a1f3e89bba6f3a33ad7c3',
+  };
+  let mockOpenUrl: jest.Mock;
+  let originalFetch: typeof global.fetch;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    mockOpenUrl = jest.fn().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('fetches and stores authifyPublicKey and signingKey', async () => {
+    const client = new AuthifyClient(
+      { appId: 'com.test', returnScheme: 'test', backend: backendConfig },
+      mockOpenUrl,
+    );
+
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        authifyPublicKey: '026b8a39bc37c4e0c49c4cadd8194db65d6089be5ed9866b370714b48b92561f',
+        signingKey: '1d69f40e6c2e302fd0bd091800df4171343717582f13d1a265bbc4230be7829a',
+      }),
+    }) as unknown as typeof fetch;
+
+    await client.initialize();
+
+    expect(() => client.login()).not.toThrow();
+  });
+
+  it('resolves silently in dev mode without backend config', async () => {
+    const client = new AuthifyClient(
+      { appId: 'com.test', returnScheme: 'test' },
+      mockOpenUrl,
+    );
+    await expect(client.initialize()).resolves.toBeUndefined();
+  });
+
+  it('throws in production without backend config', async () => {
+    const orig = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const client = new AuthifyClient(
+      { appId: 'com.test', returnScheme: 'test' },
+      mockOpenUrl,
+    );
+    await expect(client.initialize()).rejects.toThrow('requires backend config');
+    process.env.NODE_ENV = orig;
+  });
+});

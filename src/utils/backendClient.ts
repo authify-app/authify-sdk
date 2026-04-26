@@ -84,4 +84,34 @@ export class BackendClient {
       status,
     });
   }
+
+  private async getWithHmac<T>(path: string, timeoutMs = 10000): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const timestamp = Date.now().toString();
+      const bodyHash = sha256Hex('{}');
+      const signature = hmacSign(
+        `${this.config.appId}:${timestamp}:${bodyHash}`,
+        this.config.appSecret,
+      );
+      const res = await fetch(`${this.config.url}${path}`, {
+        method: 'GET',
+        headers: {
+          'X-Authify-App-Id': this.config.appId,
+          'X-Authify-Timestamp': timestamp,
+          'X-Authify-Signature': signature,
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
+      return await res.json() as T;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async fetchInitKeys(): Promise<{ authifyPublicKey: string; signingKey: string }> {
+    return this.getWithHmac<{ authifyPublicKey: string; signingKey: string }>('/apps/init');
+  }
 }

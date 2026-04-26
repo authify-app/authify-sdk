@@ -105,7 +105,11 @@ export class BackendClient {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
-      return await res.json() as T;
+      try {
+        return await res.json() as T;
+      } catch {
+        throw new Error(`${path} returned non-JSON body (status ${res.status})`);
+      }
     } finally {
       clearTimeout(timer);
     }

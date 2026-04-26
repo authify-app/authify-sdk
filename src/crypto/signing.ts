@@ -1,7 +1,12 @@
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha2';
-import { hexToBytes, bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
+import { hexToBytes, bytesToHex, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
 import { DEV_SIGNING_KEY } from './devKeys';
+
+// Ephemeral key used only for constant-time HMAC comparison inside verify().
+// Never exported; regenerated per process start. Prevents an attacker who
+// learns the signing key from predicting comparison results.
+const COMPARISON_KEY = randomBytes(32);
 
 /**
  * HMAC-SHA256 sign a message string. Returns hex-encoded MAC.
@@ -25,9 +30,9 @@ export function verify(message: string, sig: string, keyHex?: string): boolean {
   try {
     const provided = hexToBytes(sig);
     if (provided.length !== expected.length) return false;
-    // Constant-time comparison via HMAC of both values
-    const expectedHmac = hmac(sha256, key, expected);
-    const providedHmac = hmac(sha256, key, provided);
+    // Constant-time comparison via HMAC under a separate module-private key
+    const expectedHmac = hmac(sha256, COMPARISON_KEY, expected);
+    const providedHmac = hmac(sha256, COMPARISON_KEY, provided);
     return bytesToHex(expectedHmac) === bytesToHex(providedHmac);
   } catch {
     return false;

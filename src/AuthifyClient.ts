@@ -29,6 +29,7 @@ export class AuthifyClient {
   private readonly backendClient: BackendClient | null;
   private authifyPublicKey: string | null = null;
   private signingKey: string | null = null;
+  private initializePromise: Promise<void> | null = null;
 
   private static readonly PENDING_TTL_MS = 5 * 60 * 1000;
 
@@ -60,6 +61,12 @@ export class AuthifyClient {
    * In production (NODE_ENV=production) without backend config, throws.
    */
   async initialize(): Promise<void> {
+    if (this.initializePromise) return this.initializePromise;
+    this.initializePromise = this._doInitialize();
+    return this.initializePromise;
+  }
+
+  private async _doInitialize(): Promise<void> {
     if (!this.backendClient) {
       if (process.env.NODE_ENV === 'production') {
         throw new Error('[authify-sdk] initialize() requires backend config in production');

@@ -23,6 +23,15 @@ function parseCallback(url, pendingRequests, signingKey) {
             return { ok: false, error: { code: 'UNKNOWN', message: 'Missing query params' } };
         }
         const params = parseParams(url.slice(queryStart + 1));
+        // Error callback format: ?error=...&s=... (no pk/c — sent by Authify for rate-limit etc.)
+        if (params['error'] && !params['pk']) {
+            const unsigned = url.slice(0, url.lastIndexOf('&s='));
+            const s = params['s'] ?? '';
+            if (!(0, signing_1.verify)(unsigned, s, signingKey)) {
+                return { ok: false, error: { code: 'INVALID_SIGNATURE', message: 'HMAC verification failed on error callback' } };
+            }
+            return { ok: false, error: { code: 'UNKNOWN', message: params['error'] } };
+        }
         const pk = params['pk'];
         const c = params['c'];
         const s = params['s'];

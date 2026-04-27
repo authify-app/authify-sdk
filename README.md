@@ -91,9 +91,18 @@ export const authify = new AuthifyClient(
   {
     appId: 'com.yourcompany.yourapp',
     returnScheme: 'yourapp',       // must match your registered URL scheme
+    backend: {
+      url: 'https://authify-backend-64no.onrender.com',
+      appId: 'YOUR_APP_UUID',      // from POST /apps/register
+      appSecret: 'YOUR_APP_SECRET',
+    },
   },
   Linking.openURL.bind(Linking),   // injected so the SDK has no RN dependency
 );
+
+// Fetch per-app cryptographic keys before making requests.
+// Call this once, as early as possible (e.g. in your root component's useEffect).
+await authify.initialize();
 ```
 
 ### 2. Register callbacks (in your root component)
@@ -155,7 +164,30 @@ authify.requestIdentity(['firstName', 'lastName', 'email', 'phone', 'dob']);
 |-----------|------|-------------|
 | `config.appId` | `string` | Your app's bundle identifier (e.g. `com.yourcompany.yourapp`) |
 | `config.returnScheme` | `string` | Your registered deep link scheme (e.g. `yourapp`) |
+| `config.backend` | `BackendConfig` (optional) | Backend control plane config. Required in production. |
 | `openUrl` | `(url: string) => Promise<void>` | URL opener — pass `Linking.openURL.bind(Linking)` |
+
+```typescript
+interface BackendConfig {
+  url: string;       // Authify backend base URL
+  appId: string;     // UUID assigned at app registration
+  appSecret: string; // Hex secret from registration — authenticates backend requests
+}
+```
+
+---
+
+### `client.initialize()`
+
+Fetches per-app cryptographic keys from the backend and stores them for use in all subsequent requests and response verification. **Call this once, before `login()` or `requestIdentity()`.**
+
+- Idempotent — concurrent calls share the same in-flight Promise.
+- No-op when `backend` config is omitted (development/test mode).
+- Throws in `NODE_ENV=production` when `backend` config is absent.
+
+```typescript
+await authify.initialize();
+```
 
 ---
 
@@ -250,18 +282,18 @@ Each payload includes a 32-byte random nonce and a Unix timestamp. Authify rejec
 - Requests older than 5 minutes
 - Any nonce seen more than once
 
-### Phase 1 limitation — shared dev keys
+### Per-app signing keys (live)
 
-Phase 1 uses a **shared hardcoded keypair** for development and testing. This means:
-- All apps in Phase 1 share the same encryption keys
-- The keys provide tamper detection and confidentiality in transit
-- They do **not** provide per-app isolation or billing enforcement
+Starting with v0.2.0, each registered app has a unique HMAC signing key. `initialize()` fetches this key at startup so:
+- Every callback URL carries a signature that only your app can verify
+- Authify rejects requests signed with a different app's key
+- Error callbacks (rate limits, unknown app ID, etc.) are also signed
 
-**Phase 2** will introduce per-app keypairs fetched from the Authify control plane via `SDK.initialize(apiKey)`. Contact **hello@authify.app** to get on the Phase 2 waitlist.
+The X25519 encryption keypair is still shared across all Phase 1 apps (the dev keypair in `src/crypto/devKeys.ts` is used as fallback when `initialize()` is not called or backend config is absent). Per-app encryption keys require Phase 2.
 
 ### No server, no tracking
 
-The SDK has zero network requests. All data flows directly between your app and the user's Authify app via encrypted deep links. Authify never sees your users' data.
+The SDK makes one network request at startup (`initialize()`) to fetch per-app cryptographic keys. All identity data flows directly between your app and the user's Authify app via encrypted deep links. Authify never sees your users' data.
 
 ---
 
@@ -273,7 +305,15 @@ import { View, Text, Button, Linking } from 'react-native';
 import { AuthifyClient, AuthifyResponse } from '@authify/sdk';
 
 const authify = new AuthifyClient(
-  { appId: 'com.example.myapp', returnScheme: 'myapp' },
+  {
+    appId: 'com.example.myapp',
+    returnScheme: 'myapp',
+    backend: {
+      url: 'https://authify-backend-64no.onrender.com',
+      appId: 'YOUR_APP_UUID',
+      appSecret: 'YOUR_APP_SECRET',
+    },
+  },
   Linking.openURL.bind(Linking),
 );
 
@@ -281,6 +321,9 @@ export default function App() {
   const [result, setResult] = useState<AuthifyResponse | null>(null);
 
   useEffect(() => {
+    // Fetch per-app keys before registering handlers or making requests
+    authify.initialize().catch(console.error);
+
     const unsubOk  = authify.onSuccess(r => setResult(r));
     const unsubErr = authify.onError(e => console.error(e));
     const listener = Linking.addEventListener('url', ({ url }) => authify.handleCallback(url));

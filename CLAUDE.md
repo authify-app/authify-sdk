@@ -96,3 +96,4 @@ npx tsc --noEmit
 
 - `pendingRequests` Map is in-memory — lost on app cold start. A request sent before the app backgrounded and killed will not be decryptable after restart.
 - DEV_ONLY keypair provides no defense against an attacker who reads the SDK bundle.
+- `parseCallback` scans all pending requests via try-decrypt loop because `requestId` is inside the encrypted payload. An external observer can time the loop to infer the number of in-flight requests. Phase 2 fix: include `requestId` in plaintext in the callback URL for O(1) lookup.

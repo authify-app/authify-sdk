@@ -62,10 +62,16 @@ export function fromBase64Url(str: string): Uint8Array {
  *
  * @param plaintext  JSON-serialized request object
  * @param sdkEphPrivKeyHex  SDK's ephemeral private key (hex)
+ * @param authifyPublicKeyHex  Authify's public key (hex). Omit to use the DEV_ONLY key.
  * @returns base64url-encoded `nonce || ciphertext`
  */
-export function encryptRequest(plaintext: string, sdkEphPrivKeyHex: string): string {
-  const sharedSecret = computeSharedSecret(sdkEphPrivKeyHex, AUTHIFY_DEV_PUBLIC_KEY);
+export function encryptRequest(
+  plaintext: string,
+  sdkEphPrivKeyHex: string,
+  authifyPublicKeyHex?: string,
+): string {
+  const pubKey = authifyPublicKeyHex ?? AUTHIFY_DEV_PUBLIC_KEY;
+  const sharedSecret = computeSharedSecret(sdkEphPrivKeyHex, pubKey);
   const key = deriveKey(sharedSecret, 'authify-request-v1');
   const encrypted = aesGcmEncrypt(key, utf8ToBytes(plaintext));
   return toBase64Url(encrypted);

@@ -6,4 +6,5 @@ export { sign, verify } from './crypto/signing';
 export { generateNonce, addNonce, hasNonce } from './session/nonceStore';
 export { buildAuthUrl, buildShareUrl } from './deeplink/builder';
 export { parseCallback } from './deeplink/parser';
+export type { PendingEntry } from './deeplink/parser';
 //# sourceMappingURL=index.d.ts.map

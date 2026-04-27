@@ -18,8 +18,11 @@ function generateRequestId() {
  * Build a signed, encrypted authify://auth/v1 deep link.
  * URL format: authify://auth/v1?pk={ephPubKey}&c={ciphertext}&s={sig}
  * where sig = HMAC-SHA256("/auth/v1?pk=...&c=...")
+ *
+ * @param authifyPublicKey  Per-app Authify public key (hex). Omit to use the DEV_ONLY key.
+ * @param signingKey        Per-app HMAC signing key (hex). Omit to use the DEV_ONLY key.
  */
-function buildAuthUrl(appId, returnScheme, userIdentifier) {
+function buildAuthUrl(appId, returnScheme, userIdentifier, authifyPublicKey, signingKey) {
     const keyPair = (0, keyPair_1.generateEphemeralKeyPair)();
     const requestId = generateRequestId();
     const request = {
@@ -32,9 +35,9 @@ function buildAuthUrl(appId, returnScheme, userIdentifier) {
         returnScheme,
         ...(userIdentifier ? { userIdentifier } : {}),
     };
-    const ciphertext = (0, encrypt_1.encryptRequest)(JSON.stringify(request), keyPair.privateKeyHex);
+    const ciphertext = (0, encrypt_1.encryptRequest)(JSON.stringify(request), keyPair.privateKeyHex, authifyPublicKey);
     const unsigned = `authify://auth/v1?pk=${keyPair.publicKeyHex}&c=${ciphertext}`;
-    const sig = (0, signing_1.sign)(unsigned);
+    const sig = (0, signing_1.sign)(unsigned, signingKey);
     return {
         url: `${unsigned}&s=${sig}`,
         requestId,
@@ -44,8 +47,11 @@ function buildAuthUrl(appId, returnScheme, userIdentifier) {
 /**
  * Build a signed, encrypted authify://share/v1 deep link.
  * URL format: authify://share/v1?pk={ephPubKey}&c={ciphertext}&s={sig}
+ *
+ * @param authifyPublicKey  Per-app Authify public key (hex). Omit to use the DEV_ONLY key.
+ * @param signingKey        Per-app HMAC signing key (hex). Omit to use the DEV_ONLY key.
  */
-function buildShareUrl(appId, returnScheme, fields) {
+function buildShareUrl(appId, returnScheme, fields, authifyPublicKey, signingKey) {
     const keyPair = (0, keyPair_1.generateEphemeralKeyPair)();
     const requestId = generateRequestId();
     const request = {
@@ -58,9 +64,9 @@ function buildShareUrl(appId, returnScheme, fields) {
         returnScheme,
         fields,
     };
-    const ciphertext = (0, encrypt_1.encryptRequest)(JSON.stringify(request), keyPair.privateKeyHex);
+    const ciphertext = (0, encrypt_1.encryptRequest)(JSON.stringify(request), keyPair.privateKeyHex, authifyPublicKey);
     const unsigned = `authify://share/v1?pk=${keyPair.publicKeyHex}&c=${ciphertext}`;
-    const sig = (0, signing_1.sign)(unsigned);
+    const sig = (0, signing_1.sign)(unsigned, signingKey);
     return {
         url: `${unsigned}&s=${sig}`,
         requestId,

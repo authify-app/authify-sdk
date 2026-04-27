@@ -11,7 +11,7 @@ import { sha256 } from '@noble/hashes/sha2';
 import { hmac } from '@noble/hashes/hmac';
 import { gcm } from '@noble/ciphers/aes';
 import { hexToBytes, bytesToHex, utf8ToBytes, randomBytes, concatBytes } from '@noble/hashes/utils';
-import { parseCallback } from '../src/deeplink/parser';
+import { parseCallback, PendingEntry } from '../src/deeplink/parser';
 import { generateEphemeralKeyPair } from '../src/crypto/keyPair';
 import { clearNonces } from '../src/session/nonceStore';
 
@@ -93,6 +93,11 @@ function buildCallbackUrl(sdkEphPubKeyHex: string, opts: CallbackOpts = {}): str
   return `${unsigned}&s=${sig}`;
 }
 
+/** Build a PendingEntry with a generous (1-hour) TTL for test purposes. */
+function pendingEntry(privateKeyHex: string): PendingEntry {
+  return { privateKeyHex, expiresAt: Date.now() + 60 * 60 * 1000 };
+}
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => clearNonces());
@@ -102,7 +107,7 @@ beforeEach(() => clearNonces());
 describe('parseCallback — happy path', () => {
   it('returns ok: true with correct response for a success callback', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([[`req-001`, sdkKP.privateKeyHex]]);
+    const pending = new Map([[`req-001`, pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, {
       requestId: 'req-001',
       status: 'success',
@@ -122,7 +127,7 @@ describe('parseCallback — happy path', () => {
 
   it('returns ok: true for a denied response', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([[`req-002`, sdkKP.privateKeyHex]]);
+    const pending = new Map([[`req-002`, pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, { requestId: 'req-002', status: 'denied' });
 
     const result = parseCallback(url, pending);
@@ -134,7 +139,7 @@ describe('parseCallback — happy path', () => {
 
   it('removes the matched request from the pending map after parsing', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([[`req-003`, sdkKP.privateKeyHex]]);
+    const pending = new Map([[`req-003`, pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, { requestId: 'req-003' });
 
     parseCallback(url, pending);
@@ -146,8 +151,8 @@ describe('parseCallback — happy path', () => {
     const sdkKP1 = generateEphemeralKeyPair();
     const sdkKP2 = generateEphemeralKeyPair();
     const pending = new Map([
-      ['req-a', sdkKP1.privateKeyHex],
-      ['req-b', sdkKP2.privateKeyHex],
+      ['req-a', pendingEntry(sdkKP1.privateKeyHex)],
+      ['req-b', pendingEntry(sdkKP2.privateKeyHex)],
     ]);
     const url = buildCallbackUrl(sdkKP2.publicKeyHex, { requestId: 'req-b', status: 'success' });
 
@@ -166,7 +171,7 @@ describe('parseCallback — happy path', () => {
 describe('parseCallback — signature validation', () => {
   it('rejects a callback with a tampered signature', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([['req-sig', sdkKP.privateKeyHex]]);
+    const pending = new Map([['req-sig', pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, {
       requestId: 'req-sig',
       tamperSignature: true,
@@ -180,7 +185,7 @@ describe('parseCallback — signature validation', () => {
 
   it('rejects a callback where the URL has been modified after signing', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([['req-mod', sdkKP.privateKeyHex]]);
+    const pending = new Map([['req-mod', pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, { requestId: 'req-mod' });
 
     // Tamper: replace the scheme to simulate URL modification
@@ -196,7 +201,7 @@ describe('parseCallback — signature validation', () => {
 describe('parseCallback — ciphertext integrity', () => {
   it('rejects a callback with a tampered ciphertext (AES-GCM auth tag fails)', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([['req-ct', sdkKP.privateKeyHex]]);
+    const pending = new Map([['req-ct', pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, {
       requestId: 'req-ct',
       tamperCiphertext: true,
@@ -215,12 +220,12 @@ describe('parseCallback — replay prevention', () => {
     const sdkKP = generateEphemeralKeyPair();
     const url = buildCallbackUrl(sdkKP.publicKeyHex, { requestId: 'req-replay', nonceOverride: 'fixed-nonce-aabbcc' });
 
-    const pending1 = new Map([['req-replay', sdkKP.privateKeyHex]]);
+    const pending1 = new Map([['req-replay', pendingEntry(sdkKP.privateKeyHex)]]);
     const first = parseCallback(url, pending1);
     expect(first.ok).toBe(true);
 
     // Re-add to pending (simulating replay attack)
-    const pending2 = new Map([['req-replay', sdkKP.privateKeyHex]]);
+    const pending2 = new Map([['req-replay', pendingEntry(sdkKP.privateKeyHex)]]);
     const second = parseCallback(url, pending2);
     expect(second.ok).toBe(false);
     if (!second.ok) expect(second.error.code).toBe('REPLAY_DETECTED');
@@ -232,7 +237,7 @@ describe('parseCallback — replay prevention', () => {
 describe('parseCallback — timestamp checks', () => {
   it('rejects a callback with an expired timestamp (> 5 min old)', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([['req-old', sdkKP.privateKeyHex]]);
+    const pending = new Map([['req-old', pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, {
       requestId: 'req-old',
       tsOverride: Math.floor(Date.now() / 1000) - 400,
@@ -246,7 +251,7 @@ describe('parseCallback — timestamp checks', () => {
 
   it('accepts a callback with a timestamp within the 5-min window', () => {
     const sdkKP = generateEphemeralKeyPair();
-    const pending = new Map([['req-recent', sdkKP.privateKeyHex]]);
+    const pending = new Map([['req-recent', pendingEntry(sdkKP.privateKeyHex)]]);
     const url = buildCallbackUrl(sdkKP.publicKeyHex, {
       requestId: 'req-recent',
       tsOverride: Math.floor(Date.now() / 1000) - 60,
